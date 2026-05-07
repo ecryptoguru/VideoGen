@@ -1,0 +1,4 @@
+-- Migration 008: Check constraints (NO-OP)
+-- Database constraints are enforced at the application layer via Zod validation
+-- SQLite ALTER TABLE limitations make column reconstruction risky
+-- Kept for migration sequence integrity only

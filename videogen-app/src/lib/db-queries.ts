@@ -1,4 +1,4 @@
-import db from "@/data/db";
+import { prisma } from "./db";
 import { Project, BrandKit, PlatformPreset, Scene, Voice, Generation, CalendarEvent, YouTubeMetadata, InstagramMetadata, LinkedInMetadata } from "@/types";
 import { validateFieldSchema } from "./json-validator";
 
@@ -44,15 +44,52 @@ function filterAllowedCols<T extends Record<string, unknown>>(updates: Partial<T
   return filtered;
 }
 
-export function getProjects(): Project[] {
-  return db.prepare("SELECT * FROM projects ORDER BY created_at DESC").all() as Project[];
+export async function getProjects(): Promise<Project[]> {
+  const results = await prisma.project.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+  return results.map(p => ({
+    id: p.id,
+    name: p.name,
+    platform: p.platform,
+    topic: p.topic,
+    script: p.script,
+    music_prompt: p.musicPrompt,
+    status: p.status,
+    video_mode: p.videoMode,
+    video_model: p.videoModel,
+    hook_variant: p.hookVariant,
+    thumbnail_urls: p.thumbnailUrls,
+    scheduled_at: p.scheduledAt?.toISOString(),
+    created_at: p.createdAt.toISOString(),
+    updated_at: p.updatedAt.toISOString(),
+  })) as Project[];
 }
 
-export function getProjectById(id: number): Project | undefined {
-  return db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as Project | undefined;
+export async function getProjectById(id: number): Promise<Project | null> {
+  const result = await prisma.project.findUnique({
+    where: { id }
+  });
+  if (!result) return null;
+  return {
+    id: result.id,
+    name: result.name,
+    platform: result.platform,
+    topic: result.topic,
+    script: result.script,
+    music_prompt: result.musicPrompt,
+    status: result.status,
+    video_mode: result.videoMode,
+    video_model: result.videoModel,
+    hook_variant: result.hookVariant,
+    thumbnail_urls: result.thumbnailUrls,
+    scheduled_at: result.scheduledAt?.toISOString(),
+    created_at: result.createdAt.toISOString(),
+    updated_at: result.updatedAt.toISOString(),
+  } as Project;
 }
 
-export function createProject(project: Omit<Project, "id" | "created_at" | "updated_at">): number {
+export async function createProject(project: Omit<Project, "id" | "created_at" | "updated_at">): Promise<number> {
   // Validate JSON fields before insertion
   if (project.script && !validateFieldSchema("script", project.script)) {
     throw new Error("Invalid JSON in script field");
@@ -61,23 +98,25 @@ export function createProject(project: Omit<Project, "id" | "created_at" | "upda
     throw new Error("Invalid JSON in thumbnail_urls field");
   }
 
-  const result = db.prepare(`
-    INSERT INTO projects (name, platform, topic, script, music_prompt, status, video_mode, video_model)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    project.name,
-    project.platform,
-    project.topic,
-    project.script,
-    project.music_prompt,
-    project.status,
-    project.video_mode,
-    project.video_model
-  );
-  return Number(result.lastInsertRowid);
+  const result = await prisma.project.create({
+    data: {
+      name: project.name,
+      platform: project.platform,
+      topic: project.topic,
+      script: project.script,
+      musicPrompt: project.music_prompt,
+      status: project.status,
+      videoMode: project.video_mode,
+      videoModel: project.video_model,
+      hookVariant: project.hook_variant,
+      thumbnailUrls: project.thumbnail_urls,
+      scheduledAt: project.scheduled_at ? new Date(project.scheduled_at) : null,
+    }
+  });
+  return result.id;
 }
 
-export function updateProject(id: number, updates: Partial<Project>) {
+export async function updateProject(id: number, updates: Partial<Project>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_PROJECT_COLS);
   
   // Validate JSON fields before update
@@ -88,197 +127,357 @@ export function updateProject(id: number, updates: Partial<Project>) {
     throw new Error("Invalid JSON in thumbnail_urls field");
   }
   
-  const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-  const values = Object.values(filtered);
-  if (sets.length === 0) return;
-  db.prepare(`UPDATE projects SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...values, id);
+  if (Object.keys(filtered).length === 0) return;
+  
+  await prisma.project.update({
+    where: { id },
+    data: {
+      ...filtered,
+      updatedAt: new Date()
+    }
+  });
 }
 
-export function deleteProject(id: number) {
-  db.prepare("DELETE FROM projects WHERE id = ?").run(id);
+export async function deleteProject(id: number): Promise<void> {
+  await prisma.project.delete({
+    where: { id }
+  });
 }
 
-export function getBrandKit(): BrandKit | undefined {
-  return db.prepare("SELECT * FROM brand_kit LIMIT 1").get() as BrandKit | undefined;
+export async function getBrandKit(): Promise<BrandKit | null> {
+  const result = await prisma.brandKit.findFirst();
+  if (!result) return null;
+  return {
+    id: result.id,
+    brand_name: result.brandName,
+    tagline: result.tagline,
+    description: result.description,
+    tone_of_voice: result.toneOfVoice,
+    target_audience: result.targetAudience,
+    key_messages: result.keyMessages,
+    words_to_avoid: result.wordsToAvoid,
+    brand_story: result.brandStory,
+    competitors: result.competitors,
+    primary_color: result.primaryColor,
+    secondary_color: result.secondaryColor,
+    accent_color: result.accentColor,
+    heading_font: result.headingFont,
+    body_font: result.bodyFont,
+    typography_style: result.typographyStyle,
+    logo_url: result.logoUrl,
+    logo_variant_url: result.logoVariantUrl,
+    mascot_image_url: result.mascotImageUrl,
+    mascot_file_id: result.mascotFileId,
+    style_guide_url: result.styleGuideUrl,
+    language: result.language,
+    voice_id: result.voiceId,
+    updated_at: result.updatedAt.toISOString(),
+  } as BrandKit;
 }
 
-export function updateBrandKit(updates: Partial<BrandKit>) {
+export async function updateBrandKit(updates: Partial<BrandKit>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_BRAND_KIT_COLS);
   const keys = Object.keys(filtered);
   if (keys.length === 0) return;
-  const existing = getBrandKit();
+  const existing = await getBrandKit();
   if (existing) {
-    const sets = keys.map((k) => `${k} = ?`).join(", ");
-    const values = Object.values(filtered);
-    db.prepare(`UPDATE brand_kit SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE id = 1`).run(...values);
+    await prisma.brandKit.update({
+      where: { id: existing.id },
+      data: {
+        ...filtered,
+        updatedAt: new Date()
+      }
+    });
   } else {
-    const cols = keys.join(", ");
-    const vals = Object.values(filtered);
-    const placeholders = vals.map(() => "?").join(", ");
-    db.prepare(`INSERT INTO brand_kit (${cols}) VALUES (${placeholders})`).run(...vals);
+    await prisma.brandKit.create({
+      data: filtered
+    });
   }
 }
 
-export function getPlatformPresets(): PlatformPreset[] {
-  return db.prepare("SELECT * FROM platform_presets ORDER BY id").all() as PlatformPreset[];
+export async function getPlatformPresets(): Promise<PlatformPreset[]> {
+  return await prisma.$queryRaw`SELECT * FROM platform_presets ORDER BY id` as PlatformPreset[];
 }
 
 // ─── Scenes ────────────────────────────────────────────────
 
-export function getScenesByProjectId(projectId: number): Scene[] {
-  return db.prepare("SELECT * FROM scenes WHERE project_id = ? ORDER BY order_index").all(projectId) as Scene[];
+export async function getScenesByProjectId(projectId: number): Promise<Scene[]> {
+  const results = await prisma.scene.findMany({
+    where: { projectId },
+    orderBy: { orderIndex: 'asc' }
+  });
+  return results.map(s => ({
+    id: s.id,
+    project_id: s.projectId,
+    order_index: s.orderIndex,
+    script: s.script,
+    direction_notes: s.directionNotes,
+    image_url: s.imageUrl,
+    image_base64: s.imageBase64,
+    video_task_id: s.videoTaskId,
+    video_file_id: s.videoFileId,
+    video_url: s.videoUrl,
+    status: s.status,
+    camera_commands: s.cameraCommands,
+    prompt_optimizer: s.promptOptimizer,
+    prompt_optimizer_mode: s.promptOptimizerMode,
+  })) as Scene[];
 }
 
-export function createScene(scene: Omit<Scene, "id">): number {
-  const result = db.prepare(`
-    INSERT INTO scenes (project_id, order_index, script, direction_notes, image_url, image_base64, video_task_id, video_file_id, video_url, status, camera_commands, prompt_optimizer, prompt_optimizer_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    scene.project_id,
-    scene.order_index,
-    scene.script,
-    scene.direction_notes,
-    scene.image_url,
-    scene.image_base64,
-    scene.video_task_id,
-    scene.video_file_id,
-    scene.video_url,
-    scene.status,
-    scene.camera_commands,
-    scene.prompt_optimizer,
-    scene.prompt_optimizer_mode
-  );
-  return Number(result.lastInsertRowid);
+export async function createScene(scene: Omit<Scene, "id">): Promise<number> {
+  const result = await prisma.scene.create({
+    data: {
+      projectId: scene.project_id,
+      orderIndex: scene.order_index,
+      script: scene.script,
+      directionNotes: scene.direction_notes,
+      imageUrl: scene.image_url,
+      imageBase64: scene.image_base64,
+      videoTaskId: scene.video_task_id,
+      videoFileId: scene.video_file_id,
+      videoUrl: scene.video_url,
+      status: scene.status,
+      cameraCommands: scene.camera_commands,
+      promptOptimizer: scene.prompt_optimizer,
+      promptOptimizerMode: scene.prompt_optimizer_mode
+    }
+  });
+  return result.id;
 }
 
-export function updateScene(id: number, updates: Partial<Scene>) {
+export async function updateScene(id: number, updates: Partial<Scene>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_SCENE_COLS);
-  const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-  const values = Object.values(filtered);
-  if (sets.length === 0) return;
-  db.prepare(`UPDATE scenes SET ${sets} WHERE id = ?`).run(...values, id);
+  if (Object.keys(filtered).length === 0) return;
+  
+  await prisma.scene.update({
+    where: { id },
+    data: filtered
+  });
 }
 
-export function deleteScene(id: number) {
-  db.prepare("DELETE FROM scenes WHERE id = ?").run(id);
+export async function deleteScene(id: number): Promise<void> {
+  await prisma.scene.delete({
+    where: { id }
+  });
 }
 
 // ─── Voices ────────────────────────────────────────────────
 
-export function getVoices(): Voice[] {
-  return db.prepare("SELECT * FROM voices ORDER BY created_at DESC").all() as Voice[];
+export async function getVoices(): Promise<Voice[]> {
+  const results = await prisma.voice.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+  return results.map(v => ({
+    id: v.id,
+    voice_id: v.voiceId,
+    name: v.name,
+    type: v.type,
+    source_file_id: v.sourceFileId,
+    prompt_file_id: v.promptFileId,
+    description: v.description,
+    is_default: v.isDefault,
+    created_at: v.createdAt.toISOString(),
+  })) as Voice[];
 }
 
-export function getVoiceById(id: number): Voice | undefined {
-  return db.prepare("SELECT * FROM voices WHERE id = ?").get(id) as Voice | undefined;
+export async function getVoiceById(id: number): Promise<Voice | null> {
+  const result = await prisma.voice.findUnique({
+    where: { id }
+  });
+  if (!result) return null;
+  return {
+    id: result.id,
+    voice_id: result.voiceId,
+    name: result.name,
+    type: result.type,
+    source_file_id: result.sourceFileId,
+    prompt_file_id: result.promptFileId,
+    description: result.description,
+    is_default: result.isDefault,
+    created_at: result.createdAt.toISOString(),
+  } as Voice;
 }
 
-export function createVoice(voice: Omit<Voice, "id" | "created_at">): number {
-  const result = db.prepare(`
-    INSERT INTO voices (voice_id, name, type, source_file_id, prompt_file_id, description, is_default)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    voice.voice_id,
-    voice.name,
-    voice.type,
-    voice.source_file_id,
-    voice.prompt_file_id,
-    voice.description,
-    voice.is_default
-  );
-  return Number(result.lastInsertRowid);
+export async function createVoice(voice: Omit<Voice, "id" | "created_at">): Promise<number> {
+  const result = await prisma.voice.create({
+    data: {
+      voiceId: voice.voice_id,
+      name: voice.name,
+      type: voice.type,
+      sourceFileId: voice.source_file_id,
+      promptFileId: voice.prompt_file_id,
+      description: voice.description,
+      isDefault: voice.is_default
+    }
+  });
+  return result.id;
 }
 
-export function updateVoice(id: number, updates: Partial<Voice>) {
+export async function updateVoice(id: number, updates: Partial<Voice>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_VOICE_COLS);
-  const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-  const values = Object.values(filtered);
-  if (sets.length === 0) return;
-  db.prepare(`UPDATE voices SET ${sets} WHERE id = ?`).run(...values, id);
+  if (Object.keys(filtered).length === 0) return;
+  
+  await prisma.voice.update({
+    where: { id },
+    data: filtered
+  });
 }
 
-export function deleteVoice(id: number) {
-  db.prepare("DELETE FROM voices WHERE id = ?").run(id);
+export async function deleteVoice(id: number): Promise<void> {
+  await prisma.voice.delete({
+    where: { id }
+  });
 }
 
-export function setDefaultVoice(id: number) {
-  db.prepare("UPDATE voices SET is_default = 0").run();
-  db.prepare("UPDATE voices SET is_default = 1 WHERE id = ?").run(id);
+export async function setDefaultVoice(id: number): Promise<void> {
+  await prisma.voice.updateMany({
+    data: { isDefault: 0 }
+  });
+  await prisma.voice.update({
+    where: { id },
+    data: { isDefault: 1 }
+  });
 }
 
 // ─── Generations ───────────────────────────────────────────
 
-export function getGenerations(): Generation[] {
-  return db.prepare("SELECT * FROM generations ORDER BY created_at DESC").all() as Generation[];
+export async function getGenerations(): Promise<Generation[]> {
+  const results = await prisma.generation.findMany({
+    orderBy: { createdAt: 'desc' }
+  });
+  return results.map(g => ({
+    id: g.id,
+    modality: g.modality,
+    model: g.model,
+    prompt: g.prompt,
+    params: g.params,
+    output_url: g.outputUrl,
+    file_id: g.fileId,
+    status: g.status,
+    created_at: g.createdAt.toISOString(),
+    updated_at: g.updatedAt.toISOString(),
+  })) as Generation[];
 }
 
-export function getGenerationsByModality(modality: string): Generation[] {
-  return db.prepare("SELECT * FROM generations WHERE modality = ? ORDER BY created_at DESC").all(modality) as Generation[];
+export async function getGenerationsByModality(modality: string): Promise<Generation[]> {
+  const results = await prisma.generation.findMany({
+    where: { modality },
+    orderBy: { createdAt: 'desc' }
+  });
+  return results.map(g => ({
+    id: g.id,
+    modality: g.modality,
+    model: g.model,
+    prompt: g.prompt,
+    params: g.params,
+    output_url: g.outputUrl,
+    file_id: g.fileId,
+    status: g.status,
+    created_at: g.createdAt.toISOString(),
+    updated_at: g.updatedAt.toISOString(),
+  })) as Generation[];
 }
 
-export function createGeneration(generation: Omit<Generation, "id" | "created_at">): number {
-  const result = db.prepare(`
-    INSERT INTO generations (modality, model, prompt, params, output_url, file_id, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    generation.modality,
-    generation.model,
-    generation.prompt,
-    generation.params,
-    generation.output_url,
-    generation.file_id,
-    generation.status
-  );
-  return Number(result.lastInsertRowid);
+export async function createGeneration(generation: Omit<Generation, "id" | "created_at">): Promise<number> {
+  const result = await prisma.generation.create({
+    data: {
+      modality: generation.modality,
+      model: generation.model,
+      prompt: generation.prompt,
+      params: generation.params,
+      outputUrl: generation.output_url,
+      fileId: generation.file_id,
+      status: generation.status
+    }
+  });
+  return result.id;
 }
 
-export function updateGeneration(id: number, updates: Partial<Generation>) {
+export async function updateGeneration(id: number, updates: Partial<Generation>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_GENERATION_COLS);
-  const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-  const values = Object.values(filtered);
-  if (sets.length === 0) return;
-  db.prepare(`UPDATE generations SET ${sets} WHERE id = ?`).run(...values, id);
+  if (Object.keys(filtered).length === 0) return;
+  
+  await prisma.generation.update({
+    where: { id },
+    data: filtered
+  });
 }
 
-export function deleteGeneration(id: number) {
-  db.prepare("DELETE FROM generations WHERE id = ?").run(id);
+export async function deleteGeneration(id: number): Promise<void> {
+  await prisma.generation.delete({
+    where: { id }
+  });
 }
 
 // ─── Calendar Events ───────────────────────────────────────
 
-export function getCalendarEvents(): CalendarEvent[] {
-  return db.prepare("SELECT * FROM calendar_events ORDER BY event_date").all() as CalendarEvent[];
+export async function getCalendarEvents(): Promise<CalendarEvent[]> {
+  const results = await prisma.calendarEvent.findMany({
+    orderBy: { eventDate: 'asc' }
+  });
+  return results.map(e => ({
+    id: e.id,
+    project_id: e.projectId,
+    title: e.title,
+    event_date: e.eventDate.toISOString(),
+    status: e.status,
+    platform: e.platform,
+    description: e.description,
+    created_at: e.createdAt.toISOString(),
+    updated_at: e.updatedAt.toISOString(),
+  })) as CalendarEvent[];
 }
 
-export function getCalendarEventsByDateRange(start: string, end: string): CalendarEvent[] {
-  return db.prepare("SELECT * FROM calendar_events WHERE event_date BETWEEN ? AND ? ORDER BY event_date")
-    .all(start, end) as CalendarEvent[];
+export async function getCalendarEventsByDateRange(start: string, end: string): Promise<CalendarEvent[]> {
+  const results = await prisma.calendarEvent.findMany({
+    where: {
+      eventDate: {
+        gte: new Date(start),
+        lte: new Date(end)
+      }
+    },
+    orderBy: { eventDate: 'asc' }
+  });
+  return results.map(e => ({
+    id: e.id,
+    project_id: e.projectId,
+    title: e.title,
+    event_date: e.eventDate.toISOString(),
+    status: e.status,
+    platform: e.platform,
+    description: e.description,
+    created_at: e.createdAt.toISOString(),
+    updated_at: e.updatedAt.toISOString(),
+  })) as CalendarEvent[];
 }
 
-export function createCalendarEvent(event: Omit<CalendarEvent, "id" | "created_at">): number {
-  const result = db.prepare(`
-    INSERT INTO calendar_events (project_id, title, event_date, status, platform)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(
-    event.project_id,
-    event.title,
-    event.event_date,
-    event.status,
-    event.platform
-  );
-  return Number(result.lastInsertRowid);
+export async function createCalendarEvent(event: Omit<CalendarEvent, "id" | "created_at">): Promise<number> {
+  const result = await prisma.calendarEvent.create({
+    data: {
+      projectId: event.project_id,
+      title: event.title,
+      eventDate: new Date(event.event_date),
+      status: event.status,
+      platform: event.platform
+    }
+  });
+  return result.id;
 }
 
-export function updateCalendarEvent(id: number, updates: Partial<CalendarEvent>) {
+export async function updateCalendarEvent(id: number, updates: Partial<CalendarEvent>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_CALENDAR_COLS);
-  const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-  const values = Object.values(filtered);
-  if (sets.length === 0) return;
-  db.prepare(`UPDATE calendar_events SET ${sets} WHERE id = ?`).run(...values, id);
+  if (Object.keys(filtered).length === 0) return;
+  
+  await prisma.calendarEvent.update({
+    where: { id },
+    data: filtered
+  });
 }
 
-export function deleteCalendarEvent(id: number) {
-  db.prepare("DELETE FROM calendar_events WHERE id = ?").run(id);
+export async function deleteCalendarEvent(id: number): Promise<void> {
+  await prisma.calendarEvent.delete({
+    where: { id }
+  });
 }
 
 // ─── YouTube Metadata ───────────────────────────────────────
@@ -290,32 +489,85 @@ const ALLOWED_YOUTUBE_COLS = new Set([
   "scheduled_at", "published_at",
 ] as const);
 
-export function getYouTubeMetadata(projectId: number) {
-  return db.prepare("SELECT * FROM youtube_metadata WHERE project_id = ?").get(projectId) as YouTubeMetadata | undefined;
+export async function getYouTubeMetadata(projectId: number): Promise<YouTubeMetadata | null> {
+  const result = await prisma.youtubeMetadata.findUnique({
+    where: { projectId }
+  });
+  if (!result) return null;
+  return {
+    id: result.id,
+    project_id: result.projectId,
+    title: result.title || '',
+    description: result.description || '',
+    tags: result.tags || '',
+    hashtags: result.hashtags || '',
+    category: result.category || '',
+    language: result.language || '',
+    privacy_status: (result.privacyStatus || 'public') as 'public' | 'unlisted' | 'private',
+    seo_score: result.seoScore || 0,
+    thumbnail_text: result.thumbnailText || '',
+    thumbnail_overlay_json: result.thumbnailOverlayJson || '',
+    chapters: result.chapters || '',
+    scheduled_at: result.scheduledAt?.toISOString() || null,
+    published_at: result.publishedAt?.toISOString() || null,
+    created_at: result.createdAt.toISOString(),
+    updated_at: result.updatedAt.toISOString(),
+  };
 }
 
-export function createYouTubeMetadata(data: Partial<YouTubeMetadata>): number {
-  const cols = ["project_id", ...Object.keys(filterAllowedCols(data, ALLOWED_YOUTUBE_COLS))];
-  const vals = cols.map((k) => data[k as keyof typeof data]);
-  const placeholders = cols.map(() => "?").join(", ");
-  const result = db.prepare(`INSERT INTO youtube_metadata (${cols.join(", ")}) VALUES (${placeholders})`).run(...vals);
-  return result.lastInsertRowid as number;
+export async function createYouTubeMetadata(data: Partial<YouTubeMetadata>): Promise<number> {
+  const result = await prisma.youtubeMetadata.create({
+    data: {
+      projectId: data.project_id!,
+      title: data.title,
+      description: data.description,
+      tags: data.tags,
+      hashtags: data.hashtags,
+      category: data.category,
+      language: data.language,
+      privacyStatus: data.privacy_status,
+      seoScore: data.seo_score,
+      thumbnailText: data.thumbnail_text,
+      thumbnailOverlayJson: data.thumbnail_overlay_json,
+      chapters: data.chapters,
+      scheduledAt: data.scheduled_at ? new Date(data.scheduled_at) : null,
+      publishedAt: data.published_at ? new Date(data.published_at) : null,
+    }
+  });
+  return result.id;
 }
 
-export function updateYouTubeMetadata(projectId: number, updates: Partial<YouTubeMetadata>) {
+export async function updateYouTubeMetadata(projectId: number, updates: Partial<YouTubeMetadata>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_YOUTUBE_COLS);
   if (Object.keys(filtered).length === 0) return;
-  const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-  const values = Object.values(filtered);
-  db.prepare(`UPDATE youtube_metadata SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE project_id = ?`).run(...values, projectId);
+  
+  await prisma.youtubeMetadata.update({
+    where: { projectId },
+    data: {
+      title: updates.title,
+      description: updates.description,
+      tags: updates.tags,
+      hashtags: updates.hashtags,
+      category: updates.category,
+      language: updates.language,
+      privacyStatus: updates.privacy_status,
+      seoScore: updates.seo_score,
+      thumbnailText: updates.thumbnail_text,
+      thumbnailOverlayJson: updates.thumbnail_overlay_json,
+      chapters: updates.chapters,
+      updatedAt: new Date(),
+      scheduledAt: updates.scheduled_at ? new Date(updates.scheduled_at) : undefined,
+      publishedAt: updates.published_at ? new Date(updates.published_at) : undefined,
+    }
+  });
 }
 
-export function saveYouTubeMetadata(projectId: number, data: Partial<YouTubeMetadata>) {
-  const existing = getYouTubeMetadata(projectId);
+export async function saveYouTubeMetadata(projectId: number, data: Partial<YouTubeMetadata>): Promise<void> {
+  const existing = await getYouTubeMetadata(projectId);
   if (existing) {
-    updateYouTubeMetadata(projectId, data);
+    await updateYouTubeMetadata(projectId, data);
   } else {
-    createYouTubeMetadata({ ...data, project_id: projectId });
+    await createYouTubeMetadata({ ...data, project_id: projectId });
   }
 }
 
@@ -328,32 +580,85 @@ export const ALLOWED_INSTAGRAM_COLS = new Set([
   "call_to_action", "scheduled_at", "published_at",
 ] as const);
 
-export function getInstagramMetadata(projectId: number) {
-  return db.prepare("SELECT * FROM instagram_metadata WHERE project_id = ?").get(projectId) as InstagramMetadata | undefined;
+export async function getInstagramMetadata(projectId: number): Promise<InstagramMetadata | null> {
+  const result = await prisma.instagramMetadata.findUnique({
+    where: { projectId }
+  });
+  if (!result) return null;
+  return {
+    id: result.id,
+    project_id: result.projectId,
+    caption: result.caption || '',
+    hashtags: result.hashtags || '',
+    hashtags_suggested: result.hashtagsSuggested || '',
+    story_text: result.storyText || '',
+    story_hashtags: result.storyHashtags || '',
+    reel_title: result.reelTitle || '',
+    reel_description: result.reelDescription || '',
+    cover_image_prompt: result.coverImagePrompt || '',
+    content_type: (result.contentType || 'reel') as 'reel' | 'story' | 'feed_carousel' | 'feed_single',
+    target_audience: result.targetAudience || '',
+    call_to_action: result.callToAction || '',
+    scheduled_at: result.scheduledAt?.toISOString() || null,
+    published_at: result.publishedAt?.toISOString() || null,
+    created_at: result.createdAt.toISOString(),
+    updated_at: result.updatedAt.toISOString(),
+  };
 }
 
-export function createInstagramMetadata(data: Partial<InstagramMetadata>): number {
-  const cols = ["project_id", ...Object.keys(filterAllowedCols(data, ALLOWED_INSTAGRAM_COLS))];
-  const vals = cols.map((k) => data[k as keyof typeof data]);
-  const placeholders = cols.map(() => "?").join(", ");
-  const result = db.prepare(`INSERT INTO instagram_metadata (${cols.join(", ")}) VALUES (${placeholders})`).run(...vals);
-  return result.lastInsertRowid as number;
+export async function createInstagramMetadata(data: Partial<InstagramMetadata>): Promise<number> {
+  const result = await prisma.instagramMetadata.create({
+    data: {
+      projectId: data.project_id!,
+      caption: data.caption,
+      hashtags: data.hashtags,
+      hashtagsSuggested: data.hashtags_suggested,
+      storyText: data.story_text,
+      storyHashtags: data.story_hashtags,
+      reelTitle: data.reel_title,
+      reelDescription: data.reel_description,
+      coverImagePrompt: data.cover_image_prompt,
+      contentType: data.content_type,
+      targetAudience: data.target_audience,
+      callToAction: data.call_to_action,
+      scheduledAt: data.scheduled_at ? new Date(data.scheduled_at) : null,
+      publishedAt: data.published_at ? new Date(data.published_at) : null,
+    }
+  });
+  return result.id;
 }
 
-export function updateInstagramMetadata(projectId: number, updates: Partial<InstagramMetadata>) {
+export async function updateInstagramMetadata(projectId: number, updates: Partial<InstagramMetadata>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_INSTAGRAM_COLS);
   if (Object.keys(filtered).length === 0) return;
-  const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-  const values = Object.values(filtered);
-  db.prepare(`UPDATE instagram_metadata SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE project_id = ?`).run(...values, projectId);
+  
+  await prisma.instagramMetadata.update({
+    where: { projectId },
+    data: {
+      caption: updates.caption,
+      hashtags: updates.hashtags,
+      hashtagsSuggested: updates.hashtags_suggested,
+      storyText: updates.story_text,
+      storyHashtags: updates.story_hashtags,
+      reelTitle: updates.reel_title,
+      reelDescription: updates.reel_description,
+      coverImagePrompt: updates.cover_image_prompt,
+      contentType: updates.content_type,
+      targetAudience: updates.target_audience,
+      callToAction: updates.call_to_action,
+      updatedAt: new Date(),
+      scheduledAt: updates.scheduled_at ? new Date(updates.scheduled_at) : undefined,
+      publishedAt: updates.published_at ? new Date(updates.published_at) : undefined,
+    }
+  });
 }
 
-export function saveInstagramMetadata(projectId: number, data: Partial<InstagramMetadata>) {
-  const existing = getInstagramMetadata(projectId);
+export async function saveInstagramMetadata(projectId: number, data: Partial<InstagramMetadata>): Promise<void> {
+  const existing = await getInstagramMetadata(projectId);
   if (existing) {
-    updateInstagramMetadata(projectId, data);
+    await updateInstagramMetadata(projectId, data);
   } else {
-    createInstagramMetadata({ ...data, project_id: projectId });
+    await createInstagramMetadata({ ...data, project_id: projectId });
   }
 }
 
@@ -392,32 +697,76 @@ export const ALLOWED_LINKEDIN_COLS = new Set([
   "scheduled_at", "published_at",
 ] as const);
 
-export function getLinkedInMetadata(projectId: number) {
-  return db.prepare("SELECT * FROM linkedin_metadata WHERE project_id = ?").get(projectId) as LinkedInMetadata | undefined;
+export async function getLinkedInMetadata(projectId: number): Promise<LinkedInMetadata | null> {
+  const result = await prisma.linkedinMetadata.findUnique({
+    where: { projectId }
+  });
+  if (!result) return null;
+  return {
+    id: result.id,
+    project_id: result.projectId,
+    headline: result.headline || '',
+    caption: result.caption || '',
+    hashtags: result.hashtags || '',
+    hashtags_suggested: result.hashtagsSuggested || '',
+    target_audience: result.targetAudience || '',
+    call_to_action: result.callToAction || '',
+    content_format: (result.contentFormat || 'post') as 'video' | 'post' | 'carousel' | 'article',
+    industry: result.industry || '',
+    scheduled_at: result.scheduledAt?.toISOString() || null,
+    published_at: result.publishedAt?.toISOString() || null,
+    created_at: result.createdAt.toISOString(),
+    updated_at: result.updatedAt.toISOString(),
+  };
 }
 
-export function createLinkedInMetadata(data: Partial<LinkedInMetadata>): number {
-  const cols = ["project_id", ...Object.keys(filterAllowedCols(data, ALLOWED_LINKEDIN_COLS))];
-  const vals = cols.map((k) => data[k as keyof typeof data]);
-  const placeholders = cols.map(() => "?").join(", ");
-  const result = db.prepare(`INSERT INTO linkedin_metadata (${cols.join(", ")}) VALUES (${placeholders})`).run(...vals);
-  return result.lastInsertRowid as number;
+export async function createLinkedInMetadata(data: Partial<LinkedInMetadata>): Promise<number> {
+  const result = await prisma.linkedinMetadata.create({
+    data: {
+      projectId: data.project_id!,
+      headline: data.headline,
+      caption: data.caption,
+      hashtags: data.hashtags,
+      hashtagsSuggested: data.hashtags_suggested,
+      targetAudience: data.target_audience,
+      callToAction: data.call_to_action,
+      contentFormat: data.content_format,
+      industry: data.industry,
+      scheduledAt: data.scheduled_at ? new Date(data.scheduled_at) : null,
+      publishedAt: data.published_at ? new Date(data.published_at) : null,
+    }
+  });
+  return result.id;
 }
 
-export function updateLinkedInMetadata(projectId: number, updates: Partial<LinkedInMetadata>) {
+export async function updateLinkedInMetadata(projectId: number, updates: Partial<LinkedInMetadata>): Promise<void> {
   const filtered = filterAllowedCols(updates, ALLOWED_LINKEDIN_COLS);
   if (Object.keys(filtered).length === 0) return;
-  const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-  const values = Object.values(filtered);
-  db.prepare(`UPDATE linkedin_metadata SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE project_id = ?`).run(...values, projectId);
+  
+  await prisma.linkedinMetadata.update({
+    where: { projectId },
+    data: {
+      headline: updates.headline,
+      caption: updates.caption,
+      hashtags: updates.hashtags,
+      hashtagsSuggested: updates.hashtags_suggested,
+      targetAudience: updates.target_audience,
+      callToAction: updates.call_to_action,
+      contentFormat: updates.content_format,
+      industry: updates.industry,
+      updatedAt: new Date(),
+      scheduledAt: updates.scheduled_at ? new Date(updates.scheduled_at) : undefined,
+      publishedAt: updates.published_at ? new Date(updates.published_at) : undefined,
+    }
+  });
 }
 
-export function saveLinkedInMetadata(projectId: number, data: Partial<LinkedInMetadata>) {
-  const existing = getLinkedInMetadata(projectId);
+export async function saveLinkedInMetadata(projectId: number, data: Partial<LinkedInMetadata>): Promise<void> {
+  const existing = await getLinkedInMetadata(projectId);
   if (existing) {
-    updateLinkedInMetadata(projectId, data);
+    await updateLinkedInMetadata(projectId, data);
   } else {
-    createLinkedInMetadata({ ...data, project_id: projectId });
+    await createLinkedInMetadata({ ...data, project_id: projectId });
   }
 }
 

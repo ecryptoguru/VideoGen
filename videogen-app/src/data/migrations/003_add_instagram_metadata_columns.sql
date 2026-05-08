@@ -1,3 +1,0 @@
--- Migration 003: Instagram metadata columns (NO-OP)
--- These columns are already created in migration 001
--- Kept for migration sequence integrity only

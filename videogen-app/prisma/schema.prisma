@@ -1,0 +1,354 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Project {
+  id                Int                @id @default(autoincrement())
+  name              String
+  platform          String
+  topic             String?
+  script            String?
+  musicPrompt       String?            @map("music_prompt")
+  status            String             @default("draft")
+  videoMode         String             @default("i2v") @map("video_mode")
+  videoModel        String             @default("MiniMax-Hailuo-2.3") @map("video_model")
+  hookVariant       String?            @map("hook_variant")
+  thumbnailUrls     String?            @map("thumbnail_urls")
+  scheduledAt       DateTime?          @map("scheduled_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @default(now()) @map("updated_at")
+
+  scenes            Scene[]
+  audioAssets       AudioAsset[]
+  instagramMetadata InstagramMetadata?
+  linkedinMetadata  LinkedinMetadata?
+  youtubeMetadata   YoutubeMetadata?
+  calendarEvents    CalendarEvent[]
+  viralVideos       ViralVideo[]
+
+  @@map("projects")
+}
+
+model Scene {
+  id                   Int      @id @default(autoincrement())
+  projectId            Int      @map("project_id")
+  orderIndex           Int      @map("order_index")
+  script               String?
+  directionNotes       String?  @map("direction_notes")
+  imageUrl             String?  @map("image_url")
+  imageBase64          String?  @map("image_base64")
+  videoTaskId          String?  @map("video_task_id")
+  videoFileId          String?  @map("video_file_id")
+  videoUrl             String?  @map("video_url")
+  status               String   @default("pending")
+  cameraCommands       String?  @map("camera_commands")
+  promptOptimizer      Int      @default(1) @map("prompt_optimizer")
+  promptOptimizerMode  String   @default("fast") @map("prompt_optimizer_mode")
+
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("scenes")
+}
+
+model AudioAsset {
+  id                Int      @id @default(autoincrement())
+  projectId         Int      @map("project_id")
+  type              String?
+  url               String?
+  ttsModel          String?  @map("tts_model")
+  voiceId           String?  @map("voice_id")
+  ttsSettings       String?  @map("tts_settings")
+  musicModel        String?  @map("music_model")
+  isInstrumental     Int?     @map("is_instrumental")
+  lyrics            String?
+  timestamps        String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  project           Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("audio_assets")
+}
+
+model Voice {
+  id                Int      @id @default(autoincrement())
+  voiceId           String   @unique @map("voice_id")
+  name              String?
+  type              String?
+  sourceFileId      String?  @map("source_file_id")
+  promptFileId      String?  @map("prompt_file_id")
+  description       String?
+  isDefault         Int      @default(0) @map("is_default")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@map("voices")
+}
+
+model BrandKit {
+  id                    Int      @id @default(autoincrement())
+  brandName             String?  @map("brand_name")
+  tagline               String?
+  description           String?
+  toneOfVoice           String?  @map("tone_of_voice")
+  targetAudience        String?  @map("target_audience")
+  keyMessages           String?  @map("key_messages")
+  wordsToAvoid          String?  @map("words_to_avoid")
+  brandStory            String?  @map("brand_story")
+  competitors           String?
+  primaryColor          String   @default("#7C3AED") @map("primary_color")
+  secondaryColor        String   @default("#EC4899") @map("secondary_color")
+  accentColor           String   @default("#F97316") @map("accent_color")
+  headingFont           String   @default("Inter") @map("heading_font")
+  bodyFont              String   @default("system-ui") @map("body_font")
+  typographyStyle       String   @default("modern") @map("typography_style")
+  logoUrl               String?  @map("logo_url")
+  logoVariantUrl        String?  @map("logo_variant_url")
+  mascotImageUrl        String?  @map("mascot_image_url")
+  mascotFileId          String?  @map("mascot_file_id")
+  styleGuideUrl         String?  @map("style_guide_url")
+  language              String   @default("English")
+  voiceId               String   @default("English_expressive_narrator") @map("voice_id")
+  updatedAt             DateTime @default(now()) @map("updated_at")
+
+  @@map("brand_kit")
+}
+
+model InstagramMetadata {
+  id                  Int      @id @default(autoincrement())
+  projectId           Int      @unique @map("project_id")
+  caption             String?
+  hashtags            String?
+  hashtagsSuggested   String?  @map("hashtags_suggested")
+  storyText           String?  @map("story_text")
+  storyHashtags       String?  @map("story_hashtags")
+  reelTitle           String?  @map("reel_title")
+  reelDescription     String?  @map("reel_description")
+  coverImagePrompt    String?  @map("cover_image_prompt")
+  contentType         String   @default("reel") @map("content_type")
+  targetAudience      String?  @map("target_audience")
+  callToAction        String?  @map("call_to_action")
+  scheduledAt         DateTime? @map("scheduled_at")
+  publishedAt         DateTime? @map("published_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  project             Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("instagram_metadata")
+}
+
+model LinkedinMetadata {
+  id                  Int      @id @default(autoincrement())
+  projectId           Int      @unique @map("project_id")
+  headline            String?
+  caption             String?
+  hashtags            String?
+  hashtagsSuggested   String?  @map("hashtags_suggested")
+  targetAudience      String?  @map("target_audience")
+  callToAction        String?  @map("call_to_action")
+  contentFormat       String   @default("post") @map("content_format")
+  industry            String?
+  scheduledAt         DateTime? @map("scheduled_at")
+  publishedAt         DateTime? @map("published_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  project             Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("linkedin_metadata")
+}
+
+model Competitor {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  platform            String
+  handle              String?
+  description         String?
+  niche               String?
+  followers           Int      @default(0)
+  avgEngagement       Float?   @default(0) @map("avg_engagement")
+  avgViews            Int      @default(0) @map("avg_views")
+  postingFrequency    String?  @map("posting_frequency")
+  contentThemes       String?  @map("content_themes")
+  isActive            Int      @default(1) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  @@map("competitors")
+}
+
+model TrendCache {
+  id                  Int      @id @default(autoincrement())
+  platform            String
+  category            String
+  trendText           String   @map("trend_text")
+  trendType           String   @default("hashtag") @map("trend_type")
+  volumeScore         Int      @default(0) @map("volume_score")
+  velocityScore       Int      @default(0) @map("velocity_score")
+  hashtag             String?
+  description         String?
+  examplePosts        String?  @map("example_posts")
+  postedAt            DateTime? @map("posted_at")
+  fetchedAt           DateTime @default(now()) @map("fetched_at")
+  expiresAt           DateTime? @map("expires_at")
+
+  @@map("trend_cache")
+}
+
+model ViralVideo {
+  id                  Int      @id @default(autoincrement())
+  platform            String
+  videoTitle          String   @map("video_title")
+  videoUrl            String?  @map("video_url")
+  thumbnailUrl        String?  @map("thumbnail_url")
+  creatorName         String?  @map("creator_name")
+  creatorHandle       String?  @map("creator_handle")
+  views               Int      @default(0)
+  likes               Int      @default(0)
+  comments            Int      @default(0)
+  shares              Int      @default(0)
+  engagementRate      Float?   @default(0) @map("engagement_rate")
+  postedAt            DateTime? @map("posted_at")
+  fetchedAt           DateTime @default(now()) @map("fetched_at")
+  notes               String?
+  usedInProjectId     Int?     @map("used_in_project_id")
+
+  project             Project? @relation(fields: [usedInProjectId], references: [id], onDelete: SetNull)
+
+  @@map("viral_videos")
+}
+
+model Generation {
+  id                Int      @id @default(autoincrement())
+  modality          String
+  model             String?
+  prompt            String?
+  params            String?
+  outputUrl         String?  @map("output_url")
+  fileId            String?  @map("file_id")
+  status            String   @default("pending")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @map("updated_at")
+
+  @@map("generations")
+}
+
+model CalendarEvent {
+  id                Int      @id @default(autoincrement())
+  projectId         Int?     @map("project_id")
+  title             String
+  eventDate         DateTime @map("event_date")
+  status            String   @default("scheduled")
+  platform          String?
+  description       String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @default(now()) @map("updated_at")
+
+  project           Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("calendar_events")
+}
+
+model YoutubeMetadata {
+  id                    Int      @id @default(autoincrement())
+  projectId             Int      @unique @map("project_id")
+  title                 String?
+  description           String?
+  tags                  String?
+  hashtags              String?
+  category              String?
+  language              String?
+  privacyStatus         String   @default("public") @map("privacy_status")
+  seoScore              Int?     @map("seo_score")
+  thumbnailText         String?  @map("thumbnail_text")
+  thumbnailOverlayJson  String?  @map("thumbnail_overlay_json")
+  chapters              String?
+  scheduledAt           DateTime? @map("scheduled_at")
+  publishedAt           DateTime? @map("published_at")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @default(now()) @map("updated_at")
+
+  project               Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("youtube_metadata")
+}
+
+model ApiUsage {
+  id                    Int      @id @default(autoincrement())
+  userId                String   @map("user_id")
+  projectId             Int?     @map("project_id")
+  endpoint              String
+  model                 String
+  durationMs            Int?     @map("duration_ms")
+  costCents             Int      @map("cost_cents")
+  status                String
+  errorMessage          String?  @map("error_message")
+  cacheCreationTokens   Int      @default(0) @map("cache_creation_tokens")
+  cacheReadTokens       Int      @default(0) @map("cache_read_tokens")
+  inputTokens           Int      @default(0) @map("input_tokens")
+  outputTokens          Int      @default(0) @map("output_tokens")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@map("api_usage")
+  @@index([userId])
+  @@index([projectId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([endpoint])
+}
+
+model UserQuota {
+  id                  Int      @id @default(autoincrement())
+  userId              String   @unique @map("user_id")
+  dailyQuotaCents     Int      @default(1000) @map("daily_quota_cents")
+  monthlyQuotaCents   Int      @default(30000) @map("monthly_quota_cents")
+  dailyUsedCents      Int      @default(0) @map("daily_used_cents")
+  monthlyUsedCents    Int      @default(0) @map("monthly_used_cents")
+  dailyResetDate      DateTime? @map("daily_reset_date")
+  monthlyResetDate    DateTime? @map("monthly_reset_date")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @map("updated_at")
+
+  @@map("user_quota")
+  @@index([userId])
+}
+
+model UserConsent {
+  id                      Int      @id @default(autoincrement())
+  userId                  String   @unique @map("user_id")
+  aiDataConsent           Boolean  @default(false) @map("ai_data_consent")
+  consentDate             DateTime? @map("consent_date")
+  consentVersion          String   @default("1.0") @map("consent_version")
+  dataRetentionAccepted   Boolean  @default(false) @map("data_retention_accepted")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @default(now()) @map("updated_at")
+
+  @@map("user_consent")
+  @@index([userId])
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  eventType   String   @map("event_type")
+  userId      String?  @map("user_id")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  endpoint    String
+  method      String
+  statusCode  Int?     @map("status_code")
+  details     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
+}

@@ -19,6 +19,23 @@ type ProjectModel = {
   updatedAt: Date;
 };
 
+type SceneModel = {
+  id: number;
+  projectId: number;
+  orderIndex: number;
+  script: string | null;
+  directionNotes: string | null;
+  imageUrl: string | null;
+  imageBase64: string | null;
+  videoTaskId: string | null;
+  videoFileId: string | null;
+  videoUrl: string | null;
+  status: string;
+  cameraCommands: string | null;
+  promptOptimizer: number | null;
+  promptOptimizerMode: string | null;
+};
+
 const ALLOWED_PROJECT_COLS = new Set([
   "name", "platform", "topic", "script", "music_prompt", "status",
   "video_mode", "video_model", "hook_variant", "thumbnail_urls", "scheduled_at",
@@ -255,7 +272,7 @@ export async function getScenesByProjectId(projectId: number): Promise<Scene[]> 
     where: { projectId },
     orderBy: { orderIndex: 'asc' }
   });
-  return results.map(s => ({
+  return results.map((s: SceneModel) => ({
     id: s.id,
     project_id: s.projectId,
     order_index: s.orderIndex,

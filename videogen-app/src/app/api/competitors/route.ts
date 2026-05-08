@@ -11,6 +11,23 @@ const ALLOWED_COMPETITOR_COLS = new Set([
 
 type AllowedCol = typeof ALLOWED_COMPETITOR_COLS extends Set<infer T> ? T : never;
 
+type CompetitorModel = {
+  id: number;
+  name: string;
+  platform: string;
+  handle: string | null;
+  description: string | null;
+  niche: string | null;
+  followers: number;
+  avgEngagement: number | null;
+  avgViews: number | null;
+  postingFrequency: string | null;
+  contentThemes: string | null;
+  isActive: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export async function GET() {
   try {
     const competitors = await prisma.competitor.findMany({
@@ -19,7 +36,7 @@ export async function GET() {
     });
     
     // Convert camelCase to snake_case for API response
-    const formattedCompetitors = competitors.map(c => ({
+    const formattedCompetitors = competitors.map((c: CompetitorModel) => ({
       id: c.id,
       name: c.name,
       platform: c.platform,

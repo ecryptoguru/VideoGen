@@ -2,6 +2,23 @@ import { prisma } from "./db";
 import { Project, BrandKit, PlatformPreset, Scene, Voice, Generation, CalendarEvent, YouTubeMetadata, InstagramMetadata, LinkedInMetadata } from "@/types";
 import { validateFieldSchema } from "./json-validator";
 
+type ProjectModel = {
+  id: number;
+  name: string;
+  platform: string;
+  topic: string | null;
+  script: string | null;
+  musicPrompt: string | null;
+  status: string;
+  videoMode: string | null;
+  videoModel: string | null;
+  hookVariant: string | null;
+  thumbnailUrls: string | null;
+  scheduledAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const ALLOWED_PROJECT_COLS = new Set([
   "name", "platform", "topic", "script", "music_prompt", "status",
   "video_mode", "video_model", "hook_variant", "thumbnail_urls", "scheduled_at",
@@ -64,7 +81,7 @@ export async function getProjects(): Promise<Project[]> {
       updatedAt: true,
     }
   });
-  return results.map(p => ({
+  return results.map((p: ProjectModel) => ({
     id: p.id,
     name: p.name,
     platform: p.platform,

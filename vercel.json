@@ -1,6 +1,7 @@
 {
-  "buildCommand": "cd videogen-app && npm run build",
-  "outputDirectory": "videogen-app/.next",
-  "installCommand": "cd videogen-app && npm install",
-  "framework": "nextjs"
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "rootDirectory": "videogen-app"
 }

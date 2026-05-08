@@ -4,6 +4,22 @@ import { TrendItem, TrendPlatform } from "@/types";
 
 export const dynamic = "force-dynamic";
 
+type TrendCacheModel = {
+  id: number;
+  platform: string;
+  category: string;
+  trendText: string;
+  trendType: string;
+  volumeScore: number;
+  velocityScore: number;
+  hashtag: string | null;
+  description: string | null;
+  examplePosts: string | null;
+  postedAt: Date | null;
+  fetchedAt: Date;
+  expiresAt: Date | null;
+};
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const platform = searchParams.get("platform") as TrendPlatform | null;
@@ -45,7 +61,7 @@ export async function GET(req: NextRequest) {
     });
     
     // Convert camelCase to snake_case for API response
-    const formattedRows = rows.map(r => ({
+    const formattedRows = rows.map((r: TrendCacheModel) => ({
       id: r.id,
       platform: r.platform,
       category: r.category,

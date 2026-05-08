@@ -61,6 +61,18 @@ type GenerationModel = {
   updatedAt: Date;
 };
 
+type CalendarEventModel = {
+  id: number;
+  projectId: number | null;
+  title: string;
+  eventDate: Date;
+  status: string;
+  platform: string | null;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const ALLOWED_PROJECT_COLS = new Set([
   "name", "platform", "topic", "script", "music_prompt", "status",
   "video_mode", "video_model", "hook_variant", "thumbnail_urls", "scheduled_at",
@@ -506,7 +518,7 @@ export async function getCalendarEvents(): Promise<CalendarEvent[]> {
   const results = await prisma.calendarEvent.findMany({
     orderBy: { eventDate: 'asc' }
   });
-  return results.map(e => ({
+  return results.map((e: CalendarEventModel) => ({
     id: e.id,
     project_id: e.projectId,
     title: e.title,

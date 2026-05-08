@@ -13,6 +13,19 @@ export interface AuditLog {
   created_at: string;
 }
 
+type AuditLogModel = {
+  id: number;
+  eventType: string;
+  userId: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  endpoint: string;
+  method: string;
+  statusCode: number | null;
+  details: string | null;
+  createdAt: Date;
+};
+
 /**
  * Security event types for audit logging
  */
@@ -88,7 +101,7 @@ export async function getUserAuditLogs(userId: string, limit = 100): Promise<Aud
       take: limit
     });
     
-    return logs.map(log => ({
+    return logs.map((log: AuditLogModel) => ({
       id: log.id,
       event_type: log.eventType,
       user_id: log.userId,
@@ -121,7 +134,7 @@ export async function getRecentSecurityEvents(limit = 50): Promise<AuditLog[]> {
       take: limit
     });
     
-    return logs.map(log => ({
+    return logs.map((log: AuditLogModel) => ({
       id: log.id,
       event_type: log.eventType,
       user_id: log.userId,

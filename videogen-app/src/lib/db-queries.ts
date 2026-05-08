@@ -48,6 +48,19 @@ type VoiceModel = {
   createdAt: Date;
 };
 
+type GenerationModel = {
+  id: number;
+  modality: string;
+  model: string | null;
+  prompt: string | null;
+  params: string | null;
+  outputUrl: string | null;
+  fileId: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const ALLOWED_PROJECT_COLS = new Set([
   "name", "platform", "topic", "script", "music_prompt", "status",
   "video_mode", "video_model", "hook_variant", "thumbnail_urls", "scheduled_at",
@@ -423,7 +436,7 @@ export async function getGenerations(): Promise<Generation[]> {
   const results = await prisma.generation.findMany({
     orderBy: { createdAt: 'desc' }
   });
-  return results.map(g => ({
+  return results.map((g: GenerationModel) => ({
     id: g.id,
     modality: g.modality,
     model: g.model,
@@ -442,7 +455,7 @@ export async function getGenerationsByModality(modality: string): Promise<Genera
     where: { modality },
     orderBy: { createdAt: 'desc' }
   });
-  return results.map(g => ({
+  return results.map((g: GenerationModel) => ({
     id: g.id,
     modality: g.modality,
     model: g.model,

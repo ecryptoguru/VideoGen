@@ -13,7 +13,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 **Tech Stack:**
 - Next.js 16.2.4 with App Router (NOT Pages Router)
 - React 19.2.4 with TypeScript
-- SQLite via `better-sqlite3` with migration system
+- Prisma ORM v7 with SQLite (local) and PostgreSQL/Supabase (production)
 - Tailwind CSS v4 with custom design system
 - Framer Motion for animations
 - MiniMax AI APIs (text, image, video, TTS, music, voice clone, transcribe)
@@ -95,9 +95,10 @@ videogen-app/src/
 │   └── icons/                    # Custom SVG icon components
 │       └── PlatformIcons.tsx    # Platform icons (Instagram, LinkedIn, YouTube, etc.)
 ├── data/                         # Database
-│   ├── db.ts                     # SQLite setup & schema
-│   ├── migrate.ts                # Migration runner
-│   └── migrations/               # SQL migration files
+│   ├── db.ts                     # Prisma client setup with dual database support
+│   ├── db-queries.ts              # Prisma query functions
+│   ├── migrate.ts                # Migration runner (legacy, kept for compatibility)
+│   └── migrations/               # SQL migration files (legacy)
 │       ├── 001_initial_schema.sql
 │       ├── 002_add_brand_kit_columns.sql
 │       ├── 003_add_instagram_metadata_columns.sql
@@ -107,6 +108,10 @@ videogen-app/src/
 │       ├── 007_add_performance_indexes.sql
 │       ├── 008_add_check_constraints.sql
 │       └── 009_add_audit_logs.sql
+├── prisma/                       # Prisma ORM configuration
+│   ├── schema.prisma              # Database schema (SQLite/PostgreSQL)
+│   ├── config.ts                  # Prisma configuration
+│   └── migrations/                # Prisma migrations (if using Prisma Migrate)
 ├── hooks/                        # Custom React hooks
 │   ├── use-ffmpeg.ts             # FFmpeg for video assembly
 │   └── use-video-poll.ts         # Video task polling
@@ -131,7 +136,15 @@ videogen-app/src/
 ```
 ---
 
-## Database Schema (SQLite)
+## Database Schema (SQLite/PostgreSQL)
+
+### Database Configuration
+
+The app uses Prisma ORM v7 with dual database support:
+- **Local Development**: SQLite via `@prisma/adapter-better-sqlite3`
+- **Production**: PostgreSQL via Supabase using `@prisma/adapter-pg`
+
+The database client is configured in `src/lib/db.ts` and automatically selects the appropriate adapter based on the `DATABASE_URL` environment variable.
 
 ### Tables
 
@@ -579,7 +592,16 @@ const cameraCommands = [
 | Variable | Description |
 |----------|-------------|
 | `MINIMAX_API_KEY` | MiniMax API key (required) |
-| `DATABASE_URL` | SQLite database path (optional, defaults to `./data/video-gen.db`) |
+| `DATABASE_URL` | Database connection string (SQLite: `file:./data/video-gen.db` for local, PostgreSQL connection string for Supabase production) |
+| `SUPABASE_URL` | Supabase project URL (for production) |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key (for production) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (for production) |
+
+### Local Development
+Use SQLite by default with `DATABASE_URL=file:./data/video-gen.db`
+
+### Production (Vercel)
+Set `DATABASE_URL` to your Supabase PostgreSQL connection string and include Supabase URL and keys. Configure the root directory in Vercel settings to `videogen-app`.
 
 ---
 

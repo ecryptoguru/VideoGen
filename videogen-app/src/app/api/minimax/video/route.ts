@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const userId = (req.headers.get("x-user-id") as string) || "anonymous";
   const projectId = req.headers.get("x-project-id") ? Number(req.headers.get("x-project-id")) : undefined;
 
-  const consentStatus = checkUserConsent(userId);
+  const consentStatus = await checkUserConsent(userId);
   if (!consentStatus.hasConsent && userId !== "anonymous") {
     return createConsentRequiredResponse({
       endpoint,
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const quotaCheck = checkQuota(userId);
+  const quotaCheck = await checkQuota(userId);
   if (!quotaCheck.allowed) {
     return createQuotaExceededResponse(
       quotaCheck.reason || "Quota exceeded",
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
         projectId,
         model,
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -222,7 +222,7 @@ export async function POST(req: NextRequest) {
         model,
       });
 
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -265,7 +265,7 @@ export async function POST(req: NextRequest) {
       costCents: MINIMAX_VIDEO_COST_CENTS,
     });
 
-    recordApiUsage({
+    await recordApiUsage({
       user_id: userId,
       project_id: projectId,
       endpoint,

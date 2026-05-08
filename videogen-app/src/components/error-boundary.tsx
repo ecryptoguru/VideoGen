@@ -64,10 +64,12 @@ export class ErrorBoundary extends Component<Props, State> {
                 "inline-flex items-center gap-2 rounded-lg px-4 py-2",
                 "bg-primary text-primary-foreground",
                 "hover:bg-primary/90",
-                "transition-colors"
+                "transition-colors",
+                "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               )}
+              aria-label="Try again"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
               Try again
             </button>
             {process.env.NODE_ENV === "development" && this.state.errorInfo && (

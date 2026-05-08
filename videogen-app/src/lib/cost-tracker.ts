@@ -1,4 +1,4 @@
-import db from "@/data/db";
+import { prisma } from "@/lib/db";
 
 interface ApiUsageRecord {
   user_id?: string;
@@ -79,26 +79,25 @@ function getCurrentMonth(): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function checkQuota(userId: string): QuotaCheck {
+export async function checkQuota(userId: string): Promise<QuotaCheck> {
   const today = getToday();
   const currentMonth = getCurrentMonth();
 
-  const quota = db.prepare(`
-    SELECT daily_quota_cents, monthly_quota_cents, daily_used_cents, monthly_used_cents
-    FROM user_quota WHERE user_id = ?
-  `).get(userId) as {
-    daily_quota_cents: number;
-    monthly_quota_cents: number;
-    daily_used_cents: number;
-    monthly_used_cents: number;
-  } | undefined;
+  const quota = await prisma.userQuota.findUnique({
+    where: { userId }
+  });
 
   if (!quota) {
     // Create default quota for new user
-    db.prepare(`
-      INSERT INTO user_quota (user_id, daily_quota_cents, monthly_quota_cents, daily_reset_date, monthly_reset_date)
-      VALUES (?, 1000, 30000, ?, ?)
-    `).run(userId, today, currentMonth);
+    await prisma.userQuota.create({
+      data: {
+        userId,
+        dailyQuotaCents: 1000,
+        monthlyQuotaCents: 30000,
+        dailyResetDate: new Date(today),
+        monthlyResetDate: new Date(currentMonth),
+      }
+    });
     
     return {
       allowed: true,
@@ -107,8 +106,8 @@ export function checkQuota(userId: string): QuotaCheck {
     };
   }
 
-  const dailyRemaining = quota.daily_quota_cents - quota.daily_used_cents;
-  const monthlyRemaining = quota.monthly_quota_cents - quota.monthly_used_cents;
+  const dailyRemaining = quota.dailyQuotaCents - quota.dailyUsedCents;
+  const monthlyRemaining = quota.monthlyQuotaCents - quota.monthlyUsedCents;
 
   // Check for quota exhaustion
   if (dailyRemaining <= 0) {
@@ -130,8 +129,8 @@ export function checkQuota(userId: string): QuotaCheck {
   }
 
   // Check for quota alerts (80%, 90%, 95% thresholds)
-  const dailyUsagePercent = (quota.daily_used_cents / quota.daily_quota_cents) * 100;
-  const monthlyUsagePercent = (quota.monthly_used_cents / quota.monthly_quota_cents) * 100;
+  const dailyUsagePercent = (quota.dailyUsedCents / quota.dailyQuotaCents) * 100;
+  const monthlyUsagePercent = (quota.monthlyUsedCents / quota.monthlyQuotaCents) * 100;
   
   let alertThreshold: number | undefined;
   let alertType: "daily" | "monthly" | null = null;
@@ -165,135 +164,161 @@ export function checkQuota(userId: string): QuotaCheck {
   };
 }
 
-export function recordApiUsage(record: ApiUsageRecord): void {
+export async function recordApiUsage(record: ApiUsageRecord): Promise<void> {
   const cost = record.cost_cents;
   
   // Record the API usage
-  db.prepare(`
-    INSERT INTO api_usage (
-      user_id, project_id, endpoint, model, duration_ms, cost_cents, status, error_message,
-      cache_creation_tokens, cache_read_tokens, input_tokens, output_tokens
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    record.user_id,
-    record.project_id,
-    record.endpoint,
-    record.model,
-    record.duration_ms,
-    cost,
-    record.status,
-    record.error_message || null,
-    record.cache_creation_tokens || 0,
-    record.cache_read_tokens || 0,
-    record.input_tokens || 0,
-    record.output_tokens || 0
-  );
+  await prisma.apiUsage.create({
+    data: {
+      userId: record.user_id || 'anonymous',
+      projectId: record.project_id,
+      endpoint: record.endpoint,
+      model: record.model,
+      durationMs: record.duration_ms,
+      costCents: cost,
+      status: record.status,
+      errorMessage: record.error_message,
+      cacheCreationTokens: record.cache_creation_tokens,
+      cacheReadTokens: record.cache_read_tokens,
+      inputTokens: record.input_tokens,
+      outputTokens: record.output_tokens,
+    }
+  });
 
   // Update quota usage
   const today = new Date().toISOString().split("T")[0];
   const thisMonth = new Date().toISOString().slice(0, 7);
 
-  const quota = db.prepare("SELECT id, daily_reset_date, monthly_reset_date FROM user_quota WHERE user_id = ?").get(record.user_id) as {
-    id: number;
-    daily_reset_date: string;
-    monthly_reset_date: string;
-  } | undefined;
+  const quota = await prisma.userQuota.findUnique({
+    where: { userId: record.user_id || 'anonymous' }
+  });
 
   if (quota) {
     let dailyUsed = cost;
     let monthlyUsed = cost;
 
     // Reset daily if needed
-    if (quota.daily_reset_date !== today) {
+    if (quota.dailyResetDate?.toISOString().split('T')[0] !== today) {
       dailyUsed = cost;
-      db.prepare("UPDATE user_quota SET daily_used_cents = 0, daily_reset_date = ? WHERE id = ?").run(today, quota.id);
+      await prisma.userQuota.update({
+        where: { id: quota.id },
+        data: { dailyUsedCents: 0, dailyResetDate: new Date(today) }
+      });
     } else {
-      dailyUsed = (db.prepare("SELECT daily_used_cents FROM user_quota WHERE id = ?").get(quota.id) as { daily_used_cents: number }).daily_used_cents + cost;
+      dailyUsed = quota.dailyUsedCents + cost;
     }
 
     // Reset monthly if needed
-    if (quota.monthly_reset_date !== thisMonth) {
+    if (quota.monthlyResetDate?.toISOString().slice(0, 7) !== thisMonth) {
       monthlyUsed = cost;
-      db.prepare("UPDATE user_quota SET monthly_used_cents = 0, monthly_reset_date = ? WHERE id = ?").run(thisMonth, quota.id);
+      await prisma.userQuota.update({
+        where: { id: quota.id },
+        data: { monthlyUsedCents: 0, monthlyResetDate: new Date(thisMonth) }
+      });
     } else {
-      monthlyUsed = (db.prepare("SELECT monthly_used_cents FROM user_quota WHERE id = ?").get(quota.id) as { monthly_used_cents: number }).monthly_used_cents + cost;
+      monthlyUsed = quota.monthlyUsedCents + cost;
     }
 
-    db.prepare(`
-      UPDATE user_quota 
-      SET daily_used_cents = ?, monthly_used_cents = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(dailyUsed, monthlyUsed, quota.id);
+    await prisma.userQuota.update({
+      where: { id: quota.id },
+      data: {
+        dailyUsedCents: dailyUsed,
+        monthlyUsedCents: monthlyUsed,
+        updatedAt: new Date(),
+      }
+    });
   }
 }
 
-export function getApiUsageStats(userId: string, days: number = 30): UsageStats {
+export async function getApiUsageStats(userId: string, days: number = 30): Promise<UsageStats> {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
-  const stats = db.prepare(`
-    SELECT 
-      COUNT(*) as total_requests,
-      SUM(cost_cents) as total_cost_cents,
-      SUM(cache_read_tokens) as total_cache_reads,
-      AVG(duration_ms) as avg_duration_ms
-    FROM api_usage
-    WHERE user_id = ? AND created_at >= ?
-  `).get(userId, startDate.toISOString()) as {
-    total_requests: number;
-    total_cost_cents: number;
-    total_cache_reads: number;
-    avg_duration_ms: number;
-  };
+  const stats = await prisma.apiUsage.aggregate({
+    where: {
+      userId,
+      createdAt: { gte: startDate }
+    },
+    _count: true,
+    _sum: {
+      costCents: true,
+      cacheReadTokens: true,
+    },
+    _avg: {
+      durationMs: true,
+    }
+  });
 
-  const cacheHitRate = stats.total_requests > 0 
-    ? (stats.total_cache_reads / stats.total_requests) * 100 
+  const total_requests = stats._count || 0;
+  const total_cost_cents = stats._sum.costCents || 0;
+  const total_cache_reads = stats._sum.cacheReadTokens || 0;
+  const avg_duration_ms = stats._avg.durationMs || 0;
+
+  const cacheHitRate = total_requests > 0 
+    ? (total_cache_reads / total_requests) * 100 
     : 0;
 
   return {
-    total_requests: stats.total_requests || 0,
-    total_cost_cents: stats.total_cost_cents || 0,
-    total_cache_reads: stats.total_cache_reads || 0,
+    total_requests,
+    total_cost_cents,
+    total_cache_reads,
     cache_hit_rate: cacheHitRate,
-    avg_duration_ms: stats.avg_duration_ms || 0,
+    avg_duration_ms,
   };
 }
 
-export function getModelPerformanceMetrics(model: string, days: number = 30): ModelPerformanceMetrics {
+export async function getModelPerformanceMetrics(model: string, days: number = 30): Promise<ModelPerformanceMetrics> {
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
 
-  const stats = db.prepare(`
-    SELECT 
-      COUNT(*) as total_requests,
-      SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful_requests,
-      SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) as failed_requests,
-      AVG(duration_ms) as avg_duration_ms,
-      SUM(cost_cents) as total_cost_cents,
-      MAX(created_at) as last_used
-    FROM api_usage
-    WHERE model = ? AND created_at >= ?
-  `).get(model, startDate.toISOString()) as {
-    total_requests: number;
-    successful_requests: number;
-    failed_requests: number;
-    avg_duration_ms: number;
-    total_cost_cents: number;
-    last_used: string;
-  };
+  const stats = await prisma.apiUsage.aggregate({
+    where: {
+      model,
+      createdAt: { gte: startDate }
+    },
+    _count: true,
+    _sum: {
+      costCents: true,
+    },
+    _avg: {
+      durationMs: true,
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: 1
+  });
 
-  const successRate = stats.total_requests > 0 
-    ? (stats.successful_requests / stats.total_requests) * 100 
+  const successful_requests = await prisma.apiUsage.count({
+    where: {
+      model,
+      status: 'success',
+      createdAt: { gte: startDate }
+    }
+  });
+
+  const last_used_record = await prisma.apiUsage.findFirst({
+    where: {
+      model,
+      createdAt: { gte: startDate }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  const total_requests = stats._count || 0;
+  const failed_requests = total_requests - successful_requests;
+  const successRate = total_requests > 0 
+    ? (successful_requests / total_requests) * 100 
     : 0;
 
   return {
     model,
-    total_requests: stats.total_requests || 0,
-    successful_requests: stats.successful_requests || 0,
-    failed_requests: stats.failed_requests || 0,
+    total_requests,
+    successful_requests,
+    failed_requests,
     success_rate: successRate,
-    avg_duration_ms: stats.avg_duration_ms || 0,
-    total_cost_cents: stats.total_cost_cents || 0,
-    last_used: stats.last_used || "",
+    avg_duration_ms: stats._avg.durationMs || 0,
+    total_cost_cents: stats._sum.costCents || 0,
+    last_used: last_used_record?.createdAt.toISOString() || "",
   };
 }

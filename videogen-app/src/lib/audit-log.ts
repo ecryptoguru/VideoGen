@@ -1,4 +1,4 @@
-import db from "@/data/db";
+import { prisma } from "@/lib/db";
 
 export interface AuditLog {
   id?: number;
@@ -49,7 +49,7 @@ export enum SecurityEventType {
 /**
  * Log a security event to the audit log
  */
-export function logSecurityEvent(event: {
+export async function logSecurityEvent(event: {
   event_type: string;
   user_id?: string;
   ip_address?: string;
@@ -58,26 +58,20 @@ export function logSecurityEvent(event: {
   method: string;
   status_code?: number;
   details?: string;
-}): void {
+}): Promise<void> {
   try {
-    const stmt = db.prepare(`
-      INSERT INTO audit_logs (
-        event_type, user_id, ip_address, user_agent, 
-        endpoint, method, status_code, details, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    
-    stmt.run(
-      event.event_type,
-      event.user_id || null,
-      event.ip_address || null,
-      event.user_agent || null,
-      event.endpoint,
-      event.method,
-      event.status_code || null,
-      event.details || null,
-      new Date().toISOString()
-    );
+    await prisma.auditLog.create({
+      data: {
+        eventType: event.event_type,
+        userId: event.user_id,
+        ipAddress: event.ip_address,
+        userAgent: event.user_agent,
+        endpoint: event.endpoint,
+        method: event.method,
+        statusCode: event.status_code,
+        details: event.details,
+      }
+    });
   } catch (error) {
     console.error("Failed to log security event:", error);
   }
@@ -86,15 +80,26 @@ export function logSecurityEvent(event: {
 /**
  * Get audit logs for a user
  */
-export function getUserAuditLogs(userId: string, limit = 100): AuditLog[] {
+export async function getUserAuditLogs(userId: string, limit = 100): Promise<AuditLog[]> {
   try {
-    const stmt = db.prepare(`
-      SELECT * FROM audit_logs 
-      WHERE user_id = ? 
-      ORDER BY created_at DESC 
-      LIMIT ?
-    `);
-    return stmt.all(userId, limit) as AuditLog[];
+    const logs = await prisma.auditLog.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit
+    });
+    
+    return logs.map(log => ({
+      id: log.id,
+      event_type: log.eventType,
+      user_id: log.userId,
+      ip_address: log.ipAddress,
+      user_agent: log.userAgent,
+      endpoint: log.endpoint,
+      method: log.method,
+      status_code: log.statusCode,
+      details: log.details,
+      created_at: log.createdAt.toISOString(),
+    })) as AuditLog[];
   } catch (error) {
     console.error("Failed to get user audit logs:", error);
     return [];
@@ -104,18 +109,30 @@ export function getUserAuditLogs(userId: string, limit = 100): AuditLog[] {
 /**
  * Get recent security events
  */
-export function getRecentSecurityEvents(limit = 50): AuditLog[] {
+export async function getRecentSecurityEvents(limit = 50): Promise<AuditLog[]> {
   try {
-    const stmt = db.prepare(`
-      SELECT * FROM audit_logs 
-      WHERE event_type IN (
-        'login_failure', 'csrf_validation_failed', 
-        'rate_limit_exceeded', 'content_blocked', 'quota_exceeded'
-      )
-      ORDER BY created_at DESC 
-      LIMIT ?
-    `);
-    return stmt.all(limit) as AuditLog[];
+    const logs = await prisma.auditLog.findMany({
+      where: {
+        eventType: {
+          in: ['login_failure', 'csrf_validation_failed', 'rate_limit_exceeded', 'content_blocked', 'quota_exceeded']
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit
+    });
+    
+    return logs.map(log => ({
+      id: log.id,
+      event_type: log.eventType,
+      user_id: log.userId,
+      ip_address: log.ipAddress,
+      user_agent: log.userAgent,
+      endpoint: log.endpoint,
+      method: log.method,
+      status_code: log.statusCode,
+      details: log.details,
+      created_at: log.createdAt.toISOString(),
+    })) as AuditLog[];
   } catch (error) {
     console.error("Failed to get recent security events:", error);
     return [];
@@ -125,33 +142,33 @@ export function getRecentSecurityEvents(limit = 50): AuditLog[] {
 /**
  * Check for suspicious activity patterns
  */
-export function checkSuspiciousActivity(userId: string): boolean {
+export async function checkSuspiciousActivity(userId: string): Promise<boolean> {
   try {
     // Check for multiple failed logins in last hour
-    const stmt = db.prepare(`
-      SELECT COUNT(*) as count 
-      FROM audit_logs 
-      WHERE user_id = ? 
-        AND event_type = 'login_failure'
-        AND created_at > datetime('now', '-1 hour')
-    `);
-    const result = stmt.get(userId) as { count: number };
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     
-    if (result.count > 5) {
+    const loginFailures = await prisma.auditLog.count({
+      where: {
+        userId,
+        eventType: 'login_failure',
+        createdAt: { gt: oneHourAgo }
+      }
+    });
+    
+    if (loginFailures > 5) {
       return true;
     }
 
     // Check for rate limit violations
-    const rateLimitStmt = db.prepare(`
-      SELECT COUNT(*) as count 
-      FROM audit_logs 
-      WHERE user_id = ? 
-        AND event_type = 'rate_limit_exceeded'
-        AND created_at > datetime('now', '-1 hour')
-    `);
-    const rateLimitResult = rateLimitStmt.get(userId) as { count: number };
+    const rateLimitViolations = await prisma.auditLog.count({
+      where: {
+        userId,
+        eventType: 'rate_limit_exceeded',
+        createdAt: { gt: oneHourAgo }
+      }
+    });
     
-    if (rateLimitResult.count > 3) {
+    if (rateLimitViolations > 3) {
       return true;
     }
 

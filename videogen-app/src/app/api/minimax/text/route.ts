@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const userId = (req.headers.get("x-user-id") as string) || "anonymous";
 
-  const consentStatus = checkUserConsent(userId);
+  const consentStatus = await checkUserConsent(userId);
   if (!consentStatus.hasConsent && userId !== "anonymous") {
     apiLogger.logRequest({
       timestamp: new Date().toISOString(),
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const quotaCheck = checkQuota(userId);
+  const quotaCheck = await checkQuota(userId);
   if (!quotaCheck.allowed) {
     apiLogger.logRequest({
       timestamp: new Date().toISOString(),
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         duration: Date.now() - startTime,
         error: "Invalid request body",
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
         duration: Date.now() - startTime,
         error: "messages array is required",
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
         duration: Date.now() - startTime,
         error: "Each message must have role and content strings",
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
         duration: Date.now() - startTime,
         error: `PII detected: ${piiCheck.types.join(", ")}`,
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
         duration: Date.now() - startTime,
         error: "Server configuration error - missing API key",
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
         duration: requestDuration,
         error: `Schema validation failed: ${schemaValidation.errors?.join(", ")}`,
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
         duration: requestDuration,
         error: outputFilterResult.reason,
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -317,7 +317,7 @@ export async function POST(req: NextRequest) {
       duration: requestDuration,
     });
 
-    recordApiUsage({
+    await recordApiUsage({
       user_id: userId,
       project_id: projectId,
       endpoint,
@@ -344,7 +344,7 @@ export async function POST(req: NextRequest) {
         duration: requestDuration,
         error: "Request timed out",
       });
-      recordApiUsage({
+      await recordApiUsage({
         user_id: userId,
         project_id: projectId,
         endpoint,
@@ -365,7 +365,7 @@ export async function POST(req: NextRequest) {
       duration: requestDuration,
       error: error instanceof Error ? error.message : String(error),
     });
-    recordApiUsage({
+    await recordApiUsage({
       user_id: userId,
       project_id: projectId,
       endpoint,

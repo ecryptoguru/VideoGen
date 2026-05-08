@@ -21,6 +21,7 @@ export default function VoiceCloneStudio() {
   const [error, setError] = useState("");
   const [savedClones, setSavedClones] = useState<{ id: string; name: string; voice: string; date: string }[]>([]);
   const mountedRef = useRef(true);
+  const blobUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;

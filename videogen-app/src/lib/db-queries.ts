@@ -46,7 +46,23 @@ function filterAllowedCols<T extends Record<string, unknown>>(updates: Partial<T
 
 export async function getProjects(): Promise<Project[]> {
   const results = await prisma.project.findMany({
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      name: true,
+      platform: true,
+      topic: true,
+      script: true,
+      musicPrompt: true,
+      status: true,
+      videoMode: true,
+      videoModel: true,
+      hookVariant: true,
+      thumbnailUrls: true,
+      scheduledAt: true,
+      createdAt: true,
+      updatedAt: true,
+    }
   });
   return results.map(p => ({
     id: p.id,
@@ -68,7 +84,23 @@ export async function getProjects(): Promise<Project[]> {
 
 export async function getProjectById(id: number): Promise<Project | null> {
   const result = await prisma.project.findUnique({
-    where: { id }
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      platform: true,
+      topic: true,
+      script: true,
+      musicPrompt: true,
+      status: true,
+      videoMode: true,
+      videoModel: true,
+      hookVariant: true,
+      thumbnailUrls: true,
+      scheduledAt: true,
+      createdAt: true,
+      updatedAt: true,
+    }
   });
   if (!result) return null;
   return {

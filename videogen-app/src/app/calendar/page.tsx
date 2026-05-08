@@ -87,6 +87,7 @@ export default function CalendarPage() {
   }
 
   const filteredEvents = useMemo(() => {
+    if (!Array.isArray(events)) return [];
     if (selectedFilter === "all") return events;
     return events.filter((e) => e.status === selectedFilter);
   }, [events, selectedFilter]);

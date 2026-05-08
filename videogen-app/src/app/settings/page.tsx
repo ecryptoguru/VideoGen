@@ -131,7 +131,9 @@ export default function SettingsPage() {
             </div>
             <div className="flex-1">
               <h3 className="font-semibold">MiniMax API Key</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Stored locally in your browser</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                <span className="text-amber-600 dark:text-amber-400 font-medium">Development only:</span> Stored locally in your browser. For production, use server-side environment variables.
+              </p>
             </div>
             {saved && (
               <motion.span

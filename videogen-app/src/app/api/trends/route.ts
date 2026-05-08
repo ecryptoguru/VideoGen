@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import db from "@/data/db";
+import { prisma } from "@/lib/db";
 import { TrendItem, TrendPlatform } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -18,31 +18,54 @@ export async function GET(req: NextRequest) {
 
     const expiry = new Date();
     expiry.setHours(expiry.getHours() - 1);
-    db.prepare(
-      "DELETE FROM trend_cache WHERE expires_at IS NOT NULL AND expires_at < ?"
-    ).run(expiry.toISOString());
+    
+    await prisma.trendCache.deleteMany({
+      where: {
+        expiresAt: {
+          lt: expiry
+        }
+      }
+    });
 
-    let query = "SELECT * FROM trend_cache WHERE 1=1";
-    const params: (string | null)[] = [];
-
+    const where: { platform?: string; category?: string } = {};
     if (platform) {
-      query += " AND platform = ?";
-      params.push(platform);
+      where.platform = platform;
     }
     if (category) {
-      query += " AND category = ?";
-      params.push(category);
+      where.category = category;
     }
 
-    query += " ORDER BY velocity_score DESC, volume_score DESC LIMIT 50";
+    const rows = await prisma.trendCache.findMany({
+      where,
+      orderBy: [
+        { velocityScore: 'desc' },
+        { volumeScore: 'desc' }
+      ],
+      take: 50
+    });
+    
+    // Convert camelCase to snake_case for API response
+    const formattedRows = rows.map(r => ({
+      id: r.id,
+      platform: r.platform,
+      category: r.category,
+      trend_text: r.trendText,
+      trend_type: r.trendType,
+      volume_score: r.volumeScore,
+      velocity_score: r.velocityScore,
+      hashtag: r.hashtag,
+      description: r.description,
+      example_posts: r.examplePosts,
+      posted_at: r.postedAt?.toISOString(),
+      fetched_at: r.fetchedAt.toISOString(),
+      expires_at: r.expiresAt?.toISOString(),
+    })) as TrendItem[];
 
-    const rows = db.prepare(query).all(...params) as TrendItem[];
-
-    if (rows.length === 0) {
+    if (formattedRows.length === 0) {
       return NextResponse.json(await fetchTrendsFromAI(origin, platform, category));
     }
 
-    return NextResponse.json(rows);
+    return NextResponse.json(formattedRows);
   } catch (err) {
     console.error("Trends fetch error:", err);
     return NextResponse.json({ error: "Failed to fetch trends" }, { status: 500 });
@@ -52,11 +75,6 @@ export async function GET(req: NextRequest) {
 async function fetchTrendsFromAI(origin: string, platform: TrendPlatform | null, category: string | null) {
   const platforms = platform ? [platform] : ["instagram", "linkedin", "youtube"];
   const categories = category ? [category] : ["hashtag", "topic", "format", "caption_style"];
-
-  const insertStmt = db.prepare(`
-    INSERT INTO trend_cache (platform, category, trend_text, trend_type, volume_score, velocity_score, hashtag, description, example_posts, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
 
   const expiry = new Date();
   expiry.setHours(expiry.getHours() + 2);
@@ -89,21 +107,23 @@ async function fetchTrendsFromAI(origin: string, platform: TrendPlatform | null,
 
         if (parsed.trends && Array.isArray(parsed.trends)) {
           for (const t of parsed.trends) {
-            const insertResult = insertStmt.run(
-              plat,
-              cat,
-              t.text,
-              cat,
-              Math.round(t.score * 1000),
-              Math.round(t.score * 80),
-              t.hashtag || (t.text.startsWith("#") ? t.text : null),
-              t.description || null,
-              t.examples?.join("|") || null,
-              expiry.toISOString()
-            );
+            const trend = await prisma.trendCache.create({
+              data: {
+                platform: plat,
+                category: cat,
+                trendText: t.text,
+                trendType: cat,
+                volumeScore: Math.round(t.score * 1000),
+                velocityScore: Math.round(t.score * 80),
+                hashtag: t.hashtag || (t.text.startsWith("#") ? t.text : null),
+                description: t.description || null,
+                examplePosts: t.examples?.join("|") || null,
+                expiresAt: expiry,
+              }
+            });
 
-            const trend: TrendItem = {
-              id: insertResult.lastInsertRowid as number,
+            const formattedTrend: TrendItem = {
+              id: trend.id,
               platform: plat as TrendPlatform,
               category: cat,
               trend_text: t.text,
@@ -115,7 +135,7 @@ async function fetchTrendsFromAI(origin: string, platform: TrendPlatform | null,
               example_posts: t.examples?.join("|") || undefined,
               expires_at: expiry.toISOString(),
             };
-            allTrends.push(trend);
+            allTrends.push(formattedTrend);
           }
         }
       } catch {

@@ -125,6 +125,7 @@ export default function Library() {
   }, [error]);
 
   const filteredAssets = useMemo(() => {
+    if (!Array.isArray(assets)) return [];
     if (selectedFilter === "all") return assets;
     return assets.filter((a) => {
       if (selectedFilter === "audio") return a.modality === "music" || a.modality === "tts" || a.modality === "voice_clone";

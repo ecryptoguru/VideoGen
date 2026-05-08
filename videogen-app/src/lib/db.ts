@@ -2,20 +2,28 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-let prisma: PrismaClient;
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
 
-if (process.env.DATABASE_URL?.startsWith('postgresql')) {
-  // Use PostgreSQL adapter for production (Supabase)
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL,
-  });
-  prisma = new PrismaClient({ adapter });
-} else {
-  // Use SQLite adapter for local development
-  const adapter = new PrismaBetterSqlite3({
-    url: process.env.DATABASE_URL || 'file:./data/video-gen.db',
-  });
-  prisma = new PrismaClient({ adapter });
+function createPrismaClient() {
+  if (process.env.DATABASE_URL?.startsWith('postgresql')) {
+    // Use PostgreSQL adapter for production (Supabase)
+    const adapter = new PrismaPg({
+      connectionString: process.env.DATABASE_URL,
+    });
+    return new PrismaClient({ adapter });
+  } else {
+    // Use SQLite adapter for local development
+    const adapter = new PrismaBetterSqlite3({
+      url: process.env.DATABASE_URL || 'file:./data/video-gen.db',
+    });
+    return new PrismaClient({ adapter });
+  }
 }
 
-export { prisma };
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}

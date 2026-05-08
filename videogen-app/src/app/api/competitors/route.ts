@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import db from "@/data/db";
+import { prisma } from "@/lib/db";
 import { Competitor } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +13,30 @@ type AllowedCol = typeof ALLOWED_COMPETITOR_COLS extends Set<infer T> ? T : neve
 
 export async function GET() {
   try {
-    const competitors = db.prepare(
-      "SELECT * FROM competitors WHERE is_active = 1 ORDER BY followers DESC"
-    ).all() as Competitor[];
-    return NextResponse.json(competitors);
+    const competitors = await prisma.competitor.findMany({
+      where: { isActive: 1 },
+      orderBy: { followers: 'desc' }
+    });
+    
+    // Convert camelCase to snake_case for API response
+    const formattedCompetitors = competitors.map(c => ({
+      id: c.id,
+      name: c.name,
+      platform: c.platform,
+      handle: c.handle,
+      description: c.description,
+      niche: c.niche,
+      followers: c.followers,
+      avg_engagement: c.avgEngagement,
+      avg_views: c.avgViews,
+      posting_frequency: c.postingFrequency,
+      content_themes: c.contentThemes,
+      is_active: Boolean(c.isActive),
+      created_at: c.createdAt.toISOString(),
+      updated_at: c.updatedAt.toISOString(),
+    })) as Competitor[];
+    
+    return NextResponse.json(formattedCompetitors);
   } catch (err) {
     console.error("Competitors fetch error:", err);
     return NextResponse.json({ error: "Failed to fetch competitors" }, { status: 500 });
@@ -41,24 +61,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid platform" }, { status: 400 });
     }
 
-    const result = db.prepare(`
-      INSERT INTO competitors (name, platform, handle, description, niche, followers, avg_engagement, avg_views, posting_frequency, content_themes, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      filtered.name,
-      filtered.platform,
-      filtered.handle || null,
-      filtered.description || null,
-      filtered.niche || null,
-      Number(filtered.followers) || 0,
-      Number(filtered.avg_engagement) || 0,
-      Number(filtered.avg_views) || 0,
-      filtered.posting_frequency || null,
-      filtered.content_themes || null,
-      Number(filtered.is_active) ?? 1
-    );
+    const competitor = await prisma.competitor.create({
+      data: {
+        name: filtered.name as string,
+        platform: filtered.platform as string,
+        handle: filtered.handle as string | null,
+        description: filtered.description as string | null,
+        niche: filtered.niche as string | null,
+        followers: Number(filtered.followers) || 0,
+        avgEngagement: Number(filtered.avg_engagement) || 0,
+        avgViews: Number(filtered.avg_views) || 0,
+        postingFrequency: filtered.posting_frequency as string | null,
+        contentThemes: filtered.content_themes as string | null,
+        isActive: Number(filtered.is_active) ?? 1,
+      }
+    });
 
-    return NextResponse.json({ id: result.lastInsertRowid, ...filtered }, { status: 201 });
+    return NextResponse.json({ id: competitor.id, ...filtered }, { status: 201 });
   } catch (err) {
     console.error("Competitor create error:", err);
     return NextResponse.json({ error: "Failed to create competitor" }, { status: 500 });
@@ -85,10 +104,13 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
 
-    const sets = Object.keys(filtered).map((k) => `${k} = ?`).join(", ");
-    const values = Object.values(filtered);
-
-    db.prepare(`UPDATE competitors SET ${sets}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...values, id);
+    await prisma.competitor.update({
+      where: { id: Number(id) },
+      data: {
+        ...filtered,
+        updatedAt: new Date(),
+      }
+    });
 
     return NextResponse.json({ id, ...filtered });
   } catch (err) {
@@ -106,7 +128,10 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Competitor ID is required" }, { status: 400 });
     }
 
-    db.prepare("UPDATE competitors SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(id);
+    await prisma.competitor.update({
+      where: { id: Number(id) },
+      data: { isActive: 0, updatedAt: new Date() }
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {

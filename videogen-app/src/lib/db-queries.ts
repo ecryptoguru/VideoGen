@@ -36,6 +36,18 @@ type SceneModel = {
   promptOptimizerMode: string | null;
 };
 
+type VoiceModel = {
+  id: number;
+  voiceId: string;
+  name: string | null;
+  type: string | null;
+  sourceFileId: string | null;
+  promptFileId: string | null;
+  description: string | null;
+  isDefault: number;
+  createdAt: Date;
+};
+
 const ALLOWED_PROJECT_COLS = new Set([
   "name", "platform", "topic", "script", "music_prompt", "status",
   "video_mode", "video_model", "hook_variant", "thumbnail_urls", "scheduled_at",
@@ -333,7 +345,7 @@ export async function getVoices(): Promise<Voice[]> {
   const results = await prisma.voice.findMany({
     orderBy: { createdAt: 'desc' }
   });
-  return results.map(v => ({
+  return results.map((v: VoiceModel) => ({
     id: v.id,
     voice_id: v.voiceId,
     name: v.name,

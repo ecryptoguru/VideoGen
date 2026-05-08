@@ -541,7 +541,7 @@ export async function getCalendarEventsByDateRange(start: string, end: string): 
     },
     orderBy: { eventDate: 'asc' }
   });
-  return results.map(e => ({
+  return results.map((e: CalendarEventModel) => ({
     id: e.id,
     project_id: e.projectId,
     title: e.title,

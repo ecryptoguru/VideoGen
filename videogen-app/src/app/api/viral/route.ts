@@ -4,6 +4,25 @@ import { ViralVideo, TrendPlatform } from "@/types";
 
 export const dynamic = "force-dynamic";
 
+type ViralVideoModel = {
+  id: number;
+  platform: string;
+  videoTitle: string;
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+  creatorName: string | null;
+  creatorHandle: string | null;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  engagementRate: number | null;
+  postedAt: Date | null;
+  fetchedAt: Date;
+  notes: string | null;
+  usedInProjectId: number | null;
+};
+
 const ALLOWED_VIRAL_COLS = new Set([
   "platform", "video_title", "video_url", "thumbnail_url",
   "creator_name", "creator_handle", "views", "likes",
@@ -33,7 +52,7 @@ export async function GET(req: NextRequest) {
     });
     
     // Convert camelCase to snake_case for API response
-    const formattedRows = rows.map(r => ({
+    const formattedRows = rows.map((r: ViralVideoModel) => ({
       id: r.id,
       platform: r.platform,
       video_title: r.videoTitle,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { generateText } from "@/lib/minimax-text";
 import { TrendItem, TrendPlatform } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +26,9 @@ export async function GET(req: NextRequest) {
   const platform = searchParams.get("platform") as TrendPlatform | null;
   const category = searchParams.get("category");
   const refresh = searchParams.get("refresh") === "true";
-  const origin = req.nextUrl.origin;
-
   try {
     if (refresh) {
-      return NextResponse.json(await fetchTrendsFromAI(origin, platform, category));
+      return NextResponse.json(await fetchTrendsFromAI(platform, category));
     }
 
     const expiry = new Date();
@@ -78,7 +77,7 @@ export async function GET(req: NextRequest) {
     })) as TrendItem[];
 
     if (formattedRows.length === 0) {
-      return NextResponse.json(await fetchTrendsFromAI(origin, platform, category));
+      return NextResponse.json(await fetchTrendsFromAI(platform, category));
     }
 
     return NextResponse.json(formattedRows);
@@ -88,7 +87,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-async function fetchTrendsFromAI(origin: string, platform: TrendPlatform | null, category: string | null) {
+async function fetchTrendsFromAI(platform: TrendPlatform | null, category: string | null) {
   const platforms = platform ? [platform] : ["instagram", "linkedin", "youtube"];
   const categories = category ? [category] : ["hashtag", "topic", "format", "caption_style"];
 
@@ -102,26 +101,16 @@ async function fetchTrendsFromAI(origin: string, platform: TrendPlatform | null,
       try {
         const prompt = buildTrendPrompt(plat as TrendPlatform, cat);
 
-        const res = await fetch(`${origin}/api/minimax/text`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: prompt }],
-          }),
+        const { data } = await generateText({
+          messages: [
+            { role: "user", content: prompt },
+          ],
         });
 
-        if (!res.ok) continue;
-        const data = await res.json();
-        const text = data.content?.[0]?.text || data.choices?.[0]?.message?.content || "";
+        const text = extractTextFromResponse(data);
+        const parsed = parseTrendJson(text);
 
-        let parsed: { trends?: Array<{ text: string; score: number; type?: string; hashtag?: string; description?: string; examples?: string[] }> };
-        try {
-          parsed = JSON.parse(text);
-        } catch {
-          continue;
-        }
-
-        if (parsed.trends && Array.isArray(parsed.trends)) {
+        if (parsed?.trends && Array.isArray(parsed.trends)) {
           for (const t of parsed.trends) {
             const trend = await prisma.trendCache.create({
               data: {
@@ -161,6 +150,60 @@ async function fetchTrendsFromAI(origin: string, platform: TrendPlatform | null,
   }
 
   return allTrends;
+}
+
+function extractTextFromResponse(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+  const d = data as Record<string, unknown>;
+
+  // Anthropic-compatible format
+  if (Array.isArray(d.content)) {
+    const first = d.content[0] as Record<string, unknown> | undefined;
+    if (first?.type === "text" && typeof first.text === "string") {
+      return first.text;
+    }
+  }
+
+  // OpenAI-compatible format
+  if (Array.isArray(d.choices) && d.choices.length > 0) {
+    const choice = d.choices[0] as Record<string, unknown>;
+    const msg = choice?.message as Record<string, unknown> | undefined;
+    if (msg && typeof msg.content === "string") {
+      return msg.content;
+    }
+  }
+
+  // Raw string
+  if (typeof d.content === "string") {
+    return d.content;
+  }
+
+  return "";
+}
+
+function parseTrendJson(text: string): { trends?: Array<{ text: string; score: number; hashtag?: string; description?: string; examples?: string[] }> } | null {
+  if (!text) return null;
+
+  // Strip markdown fences
+  const cleaned = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // Attempt regex extraction of JSON object/array
+    const match = cleaned.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
 }
 
 function buildTrendPrompt(platform: TrendPlatform, category: string): string {

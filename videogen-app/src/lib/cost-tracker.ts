@@ -185,49 +185,34 @@ export async function recordApiUsage(record: ApiUsageRecord): Promise<void> {
     }
   });
 
-  // Update quota usage
+  // Update quota usage atomically
   const today = new Date().toISOString().split("T")[0];
   const thisMonth = new Date().toISOString().slice(0, 7);
 
-  const quota = await prisma.userQuota.findUnique({
-    where: { userId: record.user_id || 'anonymous' }
-  });
+  await prisma.$transaction(async (tx) => {
+    const quota = await tx.userQuota.findUnique({
+      where: { userId: record.user_id || 'anonymous' }
+    });
 
-  if (quota) {
-    let dailyUsed = cost;
-    let monthlyUsed = cost;
+    if (!quota) return;
 
-    // Reset daily if needed
-    if (quota.dailyResetDate?.toISOString().split('T')[0] !== today) {
-      dailyUsed = cost;
-      await prisma.userQuota.update({
-        where: { id: quota.id },
-        data: { dailyUsedCents: 0, dailyResetDate: new Date(today) }
-      });
-    } else {
-      dailyUsed = quota.dailyUsedCents + cost;
-    }
+    const dailyReset = quota.dailyResetDate?.toISOString().split('T')[0] !== today;
+    const monthlyReset = quota.monthlyResetDate?.toISOString().slice(0, 7) !== thisMonth;
 
-    // Reset monthly if needed
-    if (quota.monthlyResetDate?.toISOString().slice(0, 7) !== thisMonth) {
-      monthlyUsed = cost;
-      await prisma.userQuota.update({
-        where: { id: quota.id },
-        data: { monthlyUsedCents: 0, monthlyResetDate: new Date(thisMonth) }
-      });
-    } else {
-      monthlyUsed = quota.monthlyUsedCents + cost;
-    }
+    const dailyUsed = dailyReset ? cost : quota.dailyUsedCents + cost;
+    const monthlyUsed = monthlyReset ? cost : quota.monthlyUsedCents + cost;
 
-    await prisma.userQuota.update({
+    await tx.userQuota.update({
       where: { id: quota.id },
       data: {
         dailyUsedCents: dailyUsed,
         monthlyUsedCents: monthlyUsed,
+        ...(dailyReset ? { dailyResetDate: new Date(today) } : {}),
+        ...(monthlyReset ? { monthlyResetDate: new Date(thisMonth) } : {}),
         updatedAt: new Date(),
       }
     });
-  }
+  });
 }
 
 export async function getApiUsageStats(userId: string, days: number = 30): Promise<UsageStats> {

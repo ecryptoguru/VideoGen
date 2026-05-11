@@ -205,10 +205,6 @@ export function filterOutput(content: string): FilterResult {
     };
   }
 
-  // Disabled output filtering for testing - allow all responses
-  // TODO: Re-enable after testing with appropriate filtering rules
-  return { allowed: true, severity: "low" };
-
   const normalizedContent = content.toLowerCase();
 
   for (const keyword of HARMFUL_KEYWORDS) {

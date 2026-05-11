@@ -28,7 +28,7 @@ describe("/api/minimax/text Integration Tests", () => {
       const response = await POST(request);
       expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data.error).toContain("messages array is required");
+      expect(data.error?.message).toContain("messages array is required");
     });
 
     it("should reject empty messages array", async () => {
